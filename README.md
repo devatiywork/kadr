@@ -152,3 +152,7 @@ and `microphone_level` are further ignored tests that use real hardware.
 
 `kadr:` links can be opened by any website, so they carry only a bare file name that is looked
 up in Kadr's own folders, never a path.
+
+## License
+
+[MIT](LICENSE)
