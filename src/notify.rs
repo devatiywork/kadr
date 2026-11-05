@@ -260,11 +260,12 @@ pub fn screenshot_taken(img: Image, autosave: bool, announce: bool) {
     });
 }
 
-pub fn video_saved(thumb: Image, name: String) {
+pub fn video_saved(thumb: Image, name: String, copied: bool) {
     in_background(move || {
         let preview = save_preview(&thumb);
         let link = format!("{SCHEME}video?name={}", encode(&name, ""));
-        show(&notification_xml("Видео сохранено", &name, Some(&link), preview.as_deref()))
+        let title = if copied { "Видео скопировано в буфер обмена" } else { "Видео сохранено" };
+        show(&notification_xml(title, &name, Some(&link), preview.as_deref()))
     });
 }
 

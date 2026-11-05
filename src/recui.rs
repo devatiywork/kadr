@@ -125,7 +125,11 @@ pub fn finished() {
         Ok(stats) => {
             crate::paths::log(&format!("recorded {} frames in {:.1}s", stats.frames, stats.duration.as_secs_f64()));
             let name = session.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            crate::notify::video_saved(session.thumb, name);
+            let copied = crate::clipboard::set_file(&session.path);
+            if let Err(e) = &copied {
+                crate::paths::log(&format!("clipboard: {e}"));
+            }
+            crate::notify::video_saved(session.thumb, name, copied.is_ok());
         }
         Err(e) => win::show_error(&format!("Запись не удалась: {e}")),
     }

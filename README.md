@@ -44,7 +44,8 @@ is chosen. `Alt+Print` and `Win+Print` keep working as usual.
 
 After a capture Windows shows a notification. A screenshot is already on the clipboard and
 saved to the system Screenshots folder; clicking the notification opens the editor. A recording
-is saved to `Videos\Записи экрана`; clicking the notification opens it in the player.
+is saved to `Videos\Записи экрана` and put on the clipboard as a file, ready to paste into a folder
+or a chat; clicking the notification opens it in the player.
 
 The overlay also has these modes:
 

@@ -1,6 +1,6 @@
 [package]
 name = "kadr"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Screenshots and high frame rate screen recording for Windows 11"
 repository = "https://github.com/devatiywork/kadr"

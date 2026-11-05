@@ -1,11 +1,15 @@
-//! Puts images on the clipboard, as a bitmap and as PNG for apps that prefer it.
+//! Puts images on the clipboard, as a bitmap and as PNG for apps that prefer it, and files
+//! the way Explorer does, so that they can be pasted into a folder or a chat.
 
 use crate::image::Image;
+use std::os::windows::ffi::OsStrExt;
+use std::path::Path;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::System::DataExchange::*;
 use windows::Win32::System::Memory::*;
-use windows::Win32::System::Ole::{CF_DIB, CF_UNICODETEXT};
+use windows::Win32::System::Ole::{CF_DIB, CF_HDROP, CF_UNICODETEXT, DROPEFFECT_COPY};
+use windows::Win32::UI::Shell::DROPFILES;
 use windows::core::*;
 
 fn global_copy(parts: &[&[u8]]) -> Result<HGLOBAL> {
@@ -71,6 +75,46 @@ pub fn set_text(text: &str) -> Result<()> {
     Ok(())
 }
 
+/// The format of a file list: a header, then each path as UTF-16 with its terminator, and one
+/// more terminator after the last path.
+fn file_list_bytes(path: &Path) -> Vec<u8> {
+    let header = DROPFILES { pFiles: size_of::<DROPFILES>() as u32, fWide: true.into(), ..Default::default() };
+    let header = unsafe { std::slice::from_raw_parts(&header as *const _ as *const u8, size_of::<DROPFILES>()) };
+    let mut bytes = header.to_vec();
+    for unit in path.as_os_str().encode_wide().chain([0, 0]) {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+    bytes
+}
+
+pub fn set_file(path: &Path) -> Result<()> {
+    let list = global_copy(&[&file_list_bytes(path)])?;
+    // Without this some programs treat the paste as a move of the original file.
+    let effect = global_copy(&[&DROPEFFECT_COPY.0.to_le_bytes()]).ok();
+    unsafe {
+        if !open_clipboard() {
+            let _ = GlobalFree(Some(list));
+            if let Some(e) = effect {
+                let _ = GlobalFree(Some(e));
+            }
+            return Err(Error::from_thread());
+        }
+        let _ = EmptyClipboard();
+        // After SetClipboardData succeeds the system owns the memory.
+        let placed = SetClipboardData(CF_HDROP.0 as u32, Some(HANDLE(list.0)));
+        if placed.is_err() {
+            let _ = GlobalFree(Some(list));
+        }
+        if let Some(e) = effect {
+            if SetClipboardData(RegisterClipboardFormatW(w!("Preferred DropEffect")), Some(HANDLE(e.0))).is_err() {
+                let _ = GlobalFree(Some(e));
+            }
+        }
+        let _ = CloseClipboard();
+        placed.map(|_| ())
+    }
+}
+
 pub fn set_image(img: &Image) -> Result<()> {
     let (header, pixels) = dib_bytes(img);
     let header_bytes = unsafe {
@@ -96,4 +140,22 @@ pub fn set_image(img: &Image) -> Result<()> {
         let _ = CloseClipboard();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_list_is_a_wide_path_with_a_double_terminator() {
+        let path = r"C:\Videos\Запись экрана.mp4";
+        let bytes = file_list_bytes(Path::new(path));
+        let header = size_of::<DROPFILES>();
+        let number = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+        assert_eq!(number(0), header as u32, "where the paths begin");
+        assert_eq!(number(header - 4), 1, "the paths are wide");
+        let units: Vec<u16> = bytes[header..].chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]])).collect();
+        let expected: Vec<u16> = path.encode_utf16().chain([0, 0]).collect();
+        assert_eq!(units, expected);
+    }
 }
